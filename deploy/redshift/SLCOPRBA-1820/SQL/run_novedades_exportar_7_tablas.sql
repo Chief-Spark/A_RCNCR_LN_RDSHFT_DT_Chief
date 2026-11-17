@@ -1,0 +1,41 @@
+-- HU SLCOPRBA-1820 | Subtarea SLCOPRBA-1825 (DT) - UNLOAD Calculo RECONOCER
+-- ============================================================
+-- run_novedades_exportar_7_tablas.sql  (Reconocer / Novedades -> cuenta Batch)
+-- Script CALL del Exportador de Novedades (GUIA-UNLOAD-Y-CARGA, Paso 1 + 2).
+--
+-- Invoca el Exportador de Novedades en bdm_datos, que:
+--   1. UNLOAD de las 7 tablas de bdm_datos a
+--      s3://<triggers_bucket>/<base>/<run_id>/data/<tabla>/  (CSV HEADER GZIP)
+--   2. Escribe el CTL final <base>/<run_id>/7_tablas_finish.json con los
+--      conteos por tabla (SOLO cuando las 7 terminaron).
+--
+-- EL FRAMEWORK BATCH lo invoca como NIVEL 4 del YAML del proceso RECONOCER,
+-- con step_procedure: bdm_datos.sp_novedades_exportar_7_tablas -- igual que los
+-- demas niveles apuntan a un SP de bdm_datos con la firma de 6 VARCHAR. Es un
+-- paso REAL (opera sobre bdm_datos.mat_*), no mock. Por eso NO hay wrapper en
+-- bdm_stage: el orquestador en bdm_datos ya expone la firma que el Framework
+-- necesita.
+--
+-- Firma del Framework Batch (6 VARCHAR, en orden, regla #7/#11 de CLAUDE.md):
+--   bdm_datos.sp_novedades_exportar_7_tablas(in_solicitud, in_nit_suscriptor,
+--       in_path_archivo, in_nemotecnico, in_id_facturacion, in_fecha_ejecucion).
+--
+-- EL MODO FULL/DELTA NO SE CABLEA AQUI. El SP lo DERIVA del slot 4
+-- (in_nemotecnico = mnemotecnico) con bdm_datos.fw_resolver_param, igual que
+-- el resto de orquestadores de Novedades (sp_novedades_ciclo_edf). El ambiente
+-- se autodetecta por CURRENT_AWS_ACCOUNT contra bdm_datos.nov_config. En una
+-- corrida real los 6 parametros los inyecta el Framework; este runner solo
+-- materializa el CALL en la cadena de deploy.
+--
+-- Los 6 slots van vacios (modo FULL por defecto). El ciclo de verificacion de
+-- Jenkins ejecuta este script DOS veces (DPLY de prueba y DPLY final). No se
+-- duplica la exportacion: el SP registra cada corrida en
+-- bdm_datos.nov_export_control con la firma de los datos; la segunda llamada
+-- encuentra la misma firma 'completado', NO hace UNLOAD y termina OK. Queda
+-- una sola carpeta nov/<run_id>/ con run_id unico (timestamp).
+--
+-- CALL NONATOMIC consistente con la cadena (el cuerpo hace UNLOAD; mezclar
+-- modos de transaccion produce P0001). UTF-8 sin BOM. ASCII sin acentos.
+-- ============================================================
+
+CALL bdm_datos.sp_novedades_exportar_7_tablas(CAST('' AS VARCHAR), CAST('' AS VARCHAR), CAST('' AS VARCHAR), CAST('' AS VARCHAR), CAST('' AS VARCHAR), CAST('' AS VARCHAR));
